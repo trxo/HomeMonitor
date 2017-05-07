@@ -19,7 +19,9 @@ std::string HexToBin(const std::string &strHex);
 
 std::string frameDecode(char *client_message);
 
-void frameEncode(std::string,std::string &outFrame);
+void frameEncode(std::string, std::string &outFrame);
+
+void handshake(bool &handshake);
 
 enum WS_Status {
     WS_STATUS_CONNECT = 0,
@@ -44,8 +46,6 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in server, client;
     char client_message[2000];
 
-    //头文件：#include <sys/types.h>   #include <sys/socket.h>
-    //定义函数：int socket(int domain, int type, int protocol);
     //Create socket
 
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
             }
 
             std::string accept = getKey(websocketKey);
-            
+
             response = "HTTP/1.1 101 Switching Protocols\r\n";
             response += "Upgrade: websocket\r\n";
             response += "Connection: upgrade\r\n";
@@ -150,7 +150,7 @@ int main(int argc, char *argv[]) {
 
             std::string res;
 
-            frameEncode(res_str,res);
+            frameEncode(res_str, res);
 
             write(client_sock, res.c_str(), res.size());
 
@@ -258,55 +258,49 @@ std::string frameDecode(char *client_message) {
     return payloadData;
 }
 
-void frameEncode(std::string msg,std::string &outFrame)
-{
-        uint32_t messageLength = msg.size();
-        std::cout << "messageLength: "<< messageLength << std::endl;
+void frameEncode(std::string msg, std::string &outFrame) {
+    uint32_t messageLength = msg.size();
+    std::cout << "messageLength: " << messageLength << std::endl;
 
-        uint8_t payloadFieldExtraBytes = (messageLength <= 0x7d) ? 0 : 2;
+    uint8_t payloadFieldExtraBytes = (messageLength <= 0x7d) ? 0 : 2;
 
-        //std::cout << "payloadFieldExtraBytes:";
-        //printf("%d\n",payloadFieldExtraBytes);
-
-
-        uint8_t frameHeaderSize = 2 + payloadFieldExtraBytes;
-
-        uint8_t *frameHeader = new uint8_t[frameHeaderSize];
-
-        memset(frameHeader, 0, frameHeaderSize);
-
-        frameHeader[0] = static_cast<uint8_t>(0x80 | WS_TEXT_FRAME);
-
-        frameHeader[1] = static_cast<uint8_t>(messageLength);
+    //std::cout << "payloadFieldExtraBytes:";
+    //printf("%d\n",payloadFieldExtraBytes);
 
 
+    uint8_t frameHeaderSize = 2 + payloadFieldExtraBytes;
 
-        uint32_t frameSize = frameHeaderSize + messageLength;
+    uint8_t *frameHeader = new uint8_t[frameHeaderSize];
 
-        //printf("frameSize: %d\n",frameSize);
+    memset(frameHeader, 0, frameHeaderSize);
 
-        char *frame = new char[frameSize + 1];
+    frameHeader[0] = static_cast<uint8_t>(0x80 | WS_TEXT_FRAME);
 
-        memcpy(frame, frameHeader, frameHeaderSize);
-
-        memcpy(frame + frameHeaderSize, msg.c_str(), messageLength);
-
-        frame[frameSize] = '\0';
+    frameHeader[1] = static_cast<uint8_t>(messageLength);
 
 
+    uint32_t frameSize = frameHeaderSize + messageLength;
+
+    //printf("frameSize: %d\n",frameSize);
+
+    char *frame = new char[frameSize + 1];
+
+    memcpy(frame, frameHeader, frameHeaderSize);
+
+    memcpy(frame + frameHeaderSize, msg.c_str(), messageLength);
+
+    frame[frameSize] = '\0';
 
 
-        outFrame = frame;
+    outFrame = frame;
 
-        delete[] frame;
-        delete[] frameHeader;
+    delete[] frame;
+    delete[] frameHeader;
 }
-//
-//
-//1.websocket协议简介
-//2.websocket 握手协议
-//3.websocket 编解码数据格式图
-//4.代码演示不Yui欧力iiocvbnmqm
+
+void handshake(bool &handshake) {
+
+}
 // 1.                                   websocket协议
 //      websocket约定了一个通信的规范，通过一个握手的机制，客户端（浏览器）和服务器（webserver）之间能建立一个类似tcp
 // 的连接，从而方便c/s之间的实时通信。在websocket出现之前，web交互一般是基于http协议的短连接或者长连接。
