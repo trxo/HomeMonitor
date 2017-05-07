@@ -19,19 +19,17 @@ std::string HexToBin(const std::string &strHex);
 
 std::string frameDecode(char *client_message);
 
-std::string frameEncode(std::string);
+void frameEncode(std::string,std::string &outFrame);
 
-enum WS_Status
-{
+enum WS_Status {
     WS_STATUS_CONNECT = 0,
     WS_STATUS_UNCONNECT = 1,
 };
 
-enum WS_FrameType
-{
+enum WS_FrameType {
     WS_EMPTY_FRAME = 0xF0,
     WS_ERROR_FRAME = 0xF1,
-    WS_TEXT_FRAME   = 0x01,
+    WS_TEXT_FRAME = 0x01,
     WS_BINARY_FRAME = 0x02,
     WS_PING_FRAME = 0x09,
     WS_PONG_FRAME = 0x0A,
@@ -123,7 +121,7 @@ int main(int argc, char *argv[]) {
                 if (pos != std::string::npos) {
                     std::string key = header.substr(0, pos);
                     if (key == "Sec-WebSocket-Key") {
-                        std::string value = header.substr(pos+2, header.size());
+                        std::string value = header.substr(pos + 2, header.size());
                         websocketKey = value;
                         break;
                     }
@@ -131,36 +129,31 @@ int main(int argc, char *argv[]) {
             }
 
             std::string accept = getKey(websocketKey);
-            //std::cout << accept << std::endl;
+            
             response = "HTTP/1.1 101 Switching Protocols\r\n";
             response += "Upgrade: websocket\r\n";
             response += "Connection: upgrade\r\n";
             response += "Sec-WebSocket-Accept: ";
             response += accept + "\r\n";
-            //std::cout << response << std::endl;
 
-            char p[2000];
-            response.copy(p, response.size(), 0);
-            *(p + response.size()) = '/0'; //要手动加上结束符
-
-            write(client_sock, p, strlen(p));
+            write(client_sock, response.c_str(), response.size());
 
             handshake = true;
 
         } else {
 
-//            std::cout << "recv data..." << std::endl;
-//            std::cout << strlen(client_message) << std::endl;
-//            std::cout << client_message[0] << std::endl;
-
             std::string res_str;
+
             res_str = frameDecode(client_message);
-            std::cout << res_str << std::endl;
-            //std::cout << strlen(res_str) << std::endl;
 
-            if(strlen(res_str.c_str())<125){
+            //将该消息回送客户端
 
-            }
+            std::string res;
+
+            frameEncode(res_str,res);
+
+            write(client_sock, res.c_str(), res.size());
+
 
         }
 
@@ -177,13 +170,13 @@ int main(int argc, char *argv[]) {
     return 0;
 
 }
+
 /**
  * 获取websocket加密key
  * @param key
  * @return
  */
-std::string getKey(std::string key)
-{
+std::string getKey(std::string key) {
     //std::cout << key << std::endl;
     SHA1 sha1;
     std::string dst;
@@ -230,8 +223,8 @@ std::string HexToBin(const std::string &strHex) {
 
     return strBin;
 }
-std::string frameDecode(char *client_message)
-{
+
+std::string frameDecode(char *client_message) {
 //    std::cout << "Fin: "<< (client_message[0] & 0x80) << std::endl;
 //    std::cout << "opCode: "<< (client_message[0] & 0x0F) << std::endl;
 //    std::cout << "Mask: "<< (client_message[1] & 0x80) << std::endl;
@@ -240,28 +233,73 @@ std::string frameDecode(char *client_message)
     uint8_t payloadFieldExtraBytes;
     uint16_t payloadLength = client_message[1] & 0x7F;
 
-    if((client_message[1] & 0x7F) == 126){
+    if (payloadLength == 126) {
         payloadFieldExtraBytes = 2;
 
-    }else if ((client_message[1] & 0x7F) == 127) {
+    } else if (payloadLength == 127) {
         payloadFieldExtraBytes = 8;
 
-    }else{
+    } else {
         payloadFieldExtraBytes = 0;
     }
+
+    //printf("%d", payloadFieldExtraBytes);
 
     // header: 2字节, masking key: 4字节
     const char *maskingKey = &client_message[2 + payloadFieldExtraBytes];
     char *payloadData = new char[payloadLength + 1];
     memset(payloadData, 0, payloadLength + 1);
     memcpy(payloadData, &client_message[2 + payloadFieldExtraBytes + 4], payloadLength);
-    for (int i = 0; i < payloadLength; i++)
-    {
+    for (int i = 0; i < payloadLength; i++) {
         payloadData[i] = payloadData[i] ^ maskingKey[i % 4];
     }
     //std::string abc = payloadData;
     //std::cout << payloadData << std::endl;
     return payloadData;
+}
+
+void frameEncode(std::string msg,std::string &outFrame)
+{
+        uint32_t messageLength = msg.size();
+        std::cout << "messageLength: "<< messageLength << std::endl;
+
+        uint8_t payloadFieldExtraBytes = (messageLength <= 0x7d) ? 0 : 2;
+
+        //std::cout << "payloadFieldExtraBytes:";
+        //printf("%d\n",payloadFieldExtraBytes);
+
+
+        uint8_t frameHeaderSize = 2 + payloadFieldExtraBytes;
+
+        uint8_t *frameHeader = new uint8_t[frameHeaderSize];
+
+        memset(frameHeader, 0, frameHeaderSize);
+
+        frameHeader[0] = static_cast<uint8_t>(0x80 | WS_TEXT_FRAME);
+
+        frameHeader[1] = static_cast<uint8_t>(messageLength);
+
+
+
+        uint32_t frameSize = frameHeaderSize + messageLength;
+
+        //printf("frameSize: %d\n",frameSize);
+
+        char *frame = new char[frameSize + 1];
+
+        memcpy(frame, frameHeader, frameHeaderSize);
+
+        memcpy(frame + frameHeaderSize, msg.c_str(), messageLength);
+
+        frame[frameSize] = '\0';
+
+
+
+
+        outFrame = frame;
+
+        delete[] frame;
+        delete[] frameHeader;
 }
 //
 //
