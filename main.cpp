@@ -9,35 +9,9 @@
 #include "cryptopp/filters.h"
 #include "cryptopp/hex.h"
 #include "cryptopp/base64.h"
+#include "frame.h"
 
 using namespace CryptoPP;
-
-
-std::string getKey(std::string);
-
-std::string HexToBin(const std::string &strHex);
-
-std::string frameDecode(char *client_message);
-
-void frameEncode(std::string, std::string &outFrame);
-
-void handshake(bool &handshake);
-
-enum WS_Status {
-    WS_STATUS_CONNECT = 0,
-    WS_STATUS_UNCONNECT = 1,
-};
-
-enum WS_FrameType {
-    WS_EMPTY_FRAME = 0xF0,
-    WS_ERROR_FRAME = 0xF1,
-    WS_TEXT_FRAME = 0x01,
-    WS_BINARY_FRAME = 0x02,
-    WS_PING_FRAME = 0x09,
-    WS_PONG_FRAME = 0x0A,
-    WS_OPENING_FRAME = 0xF3,
-    WS_CLOSING_FRAME = 0x08
-};
 
 
 int main(int argc, char *argv[]) {
@@ -298,9 +272,6 @@ void frameEncode(std::string msg, std::string &outFrame) {
     delete[] frameHeader;
 }
 
-void handshake(bool &handshake) {
-
-}
 // 1.                                   websocket协议
 //      websocket约定了一个通信的规范，通过一个握手的机制，客户端（浏览器）和服务器（webserver）之间能建立一个类似tcp
 // 的连接，从而方便c/s之间的实时通信。在websocket出现之前，web交互一般是基于http协议的短连接或者长连接。
