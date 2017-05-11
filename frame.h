@@ -13,6 +13,9 @@ std::string frameDecode(char *client_message);
 
 void frameEncode(std::string, std::string &outFrame);
 
+bool doHandshake(char *client_message,int client_sock);
+
+int sendMsg(std::string,int client_sock);
 
 enum WS_Status {
     WS_STATUS_CONNECT = 0,

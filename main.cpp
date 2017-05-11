@@ -65,69 +65,19 @@ int main(int argc, char *argv[]) {
 
     //Recevied message from client
     while ((read_size = recv(client_sock, client_message, 2000, 0)) > 0) {
+
         if (!handshake) {
-            std::cout << "do handshake..." << std::endl;
-            //handshake
-            std::string response;
 
-            std::string request = client_message;
-
-            std::istringstream stream(request.c_str());
-
-            std::string reqType;
-
-            std::getline(stream, reqType);
-
-
-            if (reqType != "GET / HTTP/1.1\r") {
-                std::cout << "handshake failed!" << std::endl;
-                return false;
-            }
-
-
-            std::string header;
-            std::string::size_type pos = 0;
-            std::string websocketKey;
-
-            while (std::getline(stream, header) && header != "\r") {
-                header.erase(header.end() - 1);
-                pos = header.find(":", 0);
-                if (pos != std::string::npos) {
-                    std::string key = header.substr(0, pos);
-                    if (key == "Sec-WebSocket-Key") {
-                        std::string value = header.substr(pos + 2, header.size());
-                        websocketKey = value;
-                        break;
-                    }
-                }
-            }
-
-            std::string accept = getKey(websocketKey);
-
-            response = "HTTP/1.1 101 Switching Protocols\r\n";
-            response += "Upgrade: websocket\r\n";
-            response += "Connection: upgrade\r\n";
-            response += "Sec-WebSocket-Accept: ";
-            response += accept + "\r\n";
-
-            write(client_sock, response.c_str(), response.size());
-
-            handshake = true;
+            handshake = doHandshake(client_message,client_sock);
 
         } else {
 
-            std::string res_str;
+            std::string res_str = frameDecode(client_message);
 
-            res_str = frameDecode(client_message);
+            std::cout << "recv data from client:" << res_str << std::endl;
 
             //将该消息回送客户端
-
-            std::string res;
-
-            frameEncode(res_str, res);
-
-            write(client_sock, res.c_str(), res.size());
-
+            sendMsg(res_str,client_sock);
 
         }
 
@@ -144,6 +94,66 @@ int main(int argc, char *argv[]) {
     return 0;
 
 }
+
+
+
+int sendMsg(std::string string,int client_sock){
+    std::string res;
+    frameEncode(string, res);
+    return write(client_sock, res.c_str(), res.size());
+}
+
+bool doHandshake(char *client_message,int client_sock)
+{
+    std::cout << "do handshake..." << std::endl;
+    //handshake
+    std::string response;
+
+    std::string request = client_message;
+
+    std::istringstream stream(request.c_str());
+
+    std::string reqType;
+
+    std::getline(stream, reqType);
+
+
+    if (reqType != "GET / HTTP/1.1\r") {
+        std::cout << "handshake failed!" << std::endl;
+        return false;
+    }
+
+
+    std::string header;
+    std::string::size_type pos = 0;
+    std::string websocketKey;
+
+    while (std::getline(stream, header) && header != "\r") {
+        header.erase(header.end() - 1);
+        pos = header.find(":", 0);
+        if (pos != std::string::npos) {
+            std::string key = header.substr(0, pos);
+            if (key == "Sec-WebSocket-Key") {
+                std::string value = header.substr(pos + 2, header.size());
+                websocketKey = value;
+                break;
+            }
+        }
+    }
+
+    std::string accept = getKey(websocketKey);
+
+    response = "HTTP/1.1 101 Switching Protocols\r\n";
+    response += "Upgrade: websocket\r\n";
+    response += "Connection: upgrade\r\n";
+    response += "Sec-WebSocket-Accept: ";
+    response += accept + "\r\n";
+
+    write(client_sock, response.c_str(), response.size());
+
+    return true;
+}
+
 
 /**
  * 获取websocket加密key
@@ -271,6 +281,7 @@ void frameEncode(std::string msg, std::string &outFrame) {
     delete[] frame;
     delete[] frameHeader;
 }
+
 
 // 1.                                   websocket协议
 //      websocket约定了一个通信的规范，通过一个握手的机制，客户端（浏览器）和服务器（webserver）之间能建立一个类似tcp
