@@ -13,6 +13,7 @@
 
 using namespace CryptoPP;
 
+const SERVICE_PORT = 8777;
 
 int main(int argc, char *argv[]) {
 
@@ -21,19 +22,16 @@ int main(int argc, char *argv[]) {
     char client_message[2000];
 
     //Create socket
-
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
 
     if (socket_desc == -1) {
-        printf("Cound not create socket!");
+        printf("Cound not create socket!\n");
     }
-
-    puts("Socket Created.");
 
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8777);
+    server.sin_port = htons(SERVICE_PORT);
 
     //Bind
     if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
@@ -41,13 +39,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    puts("bind done.");
-
     //listen
     listen(socket_desc, 3);
 
     //Accept and incomming connection
-    puts("Waiting for incomming connections...");
+    printf("Waiting for incomming connections...\n");
     c = sizeof(struct sockaddr_in);
 
     //accept connection from a incomming client
@@ -58,7 +54,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    puts("Connection accepted...");
+    printf("Connection accepted...\n");
 
     //握手标示
     bool handshake = false;
@@ -73,26 +69,21 @@ int main(int argc, char *argv[]) {
         } else {
 
             std::string res_str = frameDecode(client_message);
-
-            std::cout << "recv data from client:" << res_str << std::endl;
-
+            printf("recv data from client:%s\n",res_str);
             //将该消息回送客户端
             sendMsg(res_str,client_sock);
 
         }
-
         usleep(10);
     }
 
     if (read_size == 0) {
-        puts("Client disconnected.");
+        printf("Client disconnected.\n");
         fflush(stdout);
     } else if (read_size == -1) {
         perror("recv failed.");
     }
-
     return 0;
-
 }
 
 
@@ -105,7 +96,7 @@ int sendMsg(std::string string,int client_sock){
 
 bool doHandshake(char *client_message,int client_sock)
 {
-    std::cout << "do handshake..." << std::endl;
+    printf("do handshake...\n");
     //handshake
     std::string response;
 
@@ -119,7 +110,7 @@ bool doHandshake(char *client_message,int client_sock)
 
 
     if (reqType != "GET / HTTP/1.1\r") {
-        std::cout << "handshake failed!" << std::endl;
+        printf("handshake failed!\n");
         return false;
     }
 
@@ -244,13 +235,9 @@ std::string frameDecode(char *client_message) {
 
 void frameEncode(std::string msg, std::string &outFrame) {
     uint32_t messageLength = msg.size();
-    std::cout << "messageLength: " << messageLength << std::endl;
+    printf("messageLength: %d\n",messageLength);
 
     uint8_t payloadFieldExtraBytes = (messageLength <= 0x7d) ? 0 : 2;
-
-    //std::cout << "payloadFieldExtraBytes:";
-    //printf("%d\n",payloadFieldExtraBytes);
-
 
     uint8_t frameHeaderSize = 2 + payloadFieldExtraBytes;
 
@@ -281,64 +268,3 @@ void frameEncode(std::string msg, std::string &outFrame) {
     delete[] frame;
     delete[] frameHeader;
 }
-
-
-// 1.                                   websocket协议
-//      websocket约定了一个通信的规范，通过一个握手的机制，客户端（浏览器）和服务器（webserver）之间能建立一个类似tcp
-// 的连接，从而方便c/s之间的实时通信。在websocket出现之前，web交互一般是基于http协议的短连接或者长连接。
-//2.                                    websocket初始握手
-//      websocket的连接始于一个HTTP请求。该请求和其他请求很相似，但是包含一个特殊的首标————Upgrade，它表示客户端将把
-// 连接升级到websocket协议，以下是客户端和服务端的握手示例
-//
-// 客户端发起的HTTP请求:
-// ——————————————————————————————————————————————————————————————————————————————————————————
-//     GET / HTTP/1.1
-//     Host: 127.0.0.1
-//     Origin: file://
-//     Sec-Websocket-Key:
-//     Sec-Websocket-Version: 13
-//     Upgrade: websocket
-// ——————————————————————————————————————————————————————————————————————————————————————————
-//
-//
-//服务端发起的HTTP响应
-// ——————————————————————————————————————————————————————————————————————————————————————————
-//     101 Switching Protocols
-//     Connection: Upgrade
-//     Date:
-//     Sec-Websocket-Accept:
-//     Server:
-//     Upgrade: websocket
-// ——————————————————————————————————————————————————————————————————————————————————————————
-//
-//服务端响应101代码，Upgrade首标和正确的Sec-WebSocket-Accept首标后，建立连接，否则连接不能成功。成功升级后，连接的语法
-// 切换为用于表示WebSocket消息的数据帧格式。
-//                                     消息格式
-//
-//  websocket帧头
-
-//      Websockets use hybi10 frame encoding:
-//
-//      0                   1                   2                   3
-//      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-//      +-+-+-+-+-------+-+-------------+-------------------------------+
-//      |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
-//      |I|S|S|S|  (4)  |A|     (7)     |             (16/63)           |
-//      |N|V|V|V|       |S|             |   (if payload len==126/127)   |
-//      | |1|2|3|       |K|             |                               |
-//      +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
-//      |     Extended payload length continued, if payload len == 127  |
-//      + - - - - - - - - - - - - - - - +-------------------------------+
-//      |                               |Masking-key, if MASK set to 1  |
-//      +-------------------------------+-------------------------------+
-//      | Masking-key (continued)       |          Payload Data         |
-//      +-------------------------------- - - - - - - - - - - - - - - - +
-//      :                     Payload Data continued ...                :
-//      + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
-//      |                     Payload Data continued ...                |
-//      +---------------------------------------------------------------+
-//
-//      +----------+----------+
-//      |   操作码  | mask1bit |
-//      |          | 长度7bit  |
-//      +----------+----------+
