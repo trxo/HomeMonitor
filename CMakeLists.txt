@@ -5,5 +5,3 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(SOURCE_FILES main.cpp frame.h)
 add_executable(websocket_server ${SOURCE_FILES})
-
-target_link_libraries(websocket_server /usr/local/lib/libcryptopp.a)
