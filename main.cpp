@@ -8,13 +8,16 @@
 #include "frame.h"
 #include "base64/base64.cpp"
 #include "sha1/sha1.cpp"
+#include <fstream>
+#include(unistd.h)
+
 
 
 int main(int argc, char *argv[]) {
 
     int socket_desc, client_sock, c, read_size;
     struct sockaddr_in server, client;
-    char client_message[2000];
+    char client_message[2000] = {};
 
     //Create socket
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -56,18 +59,33 @@ int main(int argc, char *argv[]) {
 
     //Recevied message from client
     while ((read_size = recv(client_sock, client_message, 2000, 0)) > 0) {
-
+        printf("%d\n",read_size);
+//        char data[read_size];
+//        printf("%s\n",data);
+//        strncpy(data,client_message,read_size);
         if (!handshake) {
-
             handshake = doHandshake(client_message,client_sock);
         } else {
-            printf("clion debug\n");
+            printf("msg--------------->\n");
+
+            char d[read_size];
+            strncpy(d,client_message,read_size);
+
+
+            FILE *fp;
+            fp = fopen("buff.txt","w");
+            fwrite(d,read_size)
+            fclose(fp);
+
+
+
             std::string res_str = frameDecode(client_message);
             printf("recv data from client:%s\n",res_str.c_str());
             //将该消息回送客户端
             sendMsg(res_str,client_sock);
 
         }
+        memset(client_message,0, sizeof(client_message));
         usleep(10);
     }
 
@@ -90,7 +108,6 @@ int sendMsg(std::string string,int client_sock){
 
 bool doHandshake(char *client_message,int client_sock)
 {
-    std::cout << client_message << std::endl;
     printf("do handshake...\n");
     //handshake
     std::string response;
@@ -191,6 +208,8 @@ std::string HexToBin(const std::string &strHex) {
 }
 
 std::string frameDecode(char *client_message) {
+//    std::cout << "frameDecode" << std::endl;
+//    std::cout << client_message << std::endl;
 //    std::cout << "Fin: "<< (client_message[0] & 0x80) << std::endl;
 //    std::cout << "opCode: "<< (client_message[0] & 0x0F) << std::endl;
 //    std::cout << "Mask: "<< (client_message[1] & 0x80) << std::endl;
@@ -209,18 +228,17 @@ std::string frameDecode(char *client_message) {
         payloadFieldExtraBytes = 0;
     }
 
-    //printf("%d", payloadFieldExtraBytes);
 
     // header: 2字节, masking key: 4字节
     const char *maskingKey = &client_message[2 + payloadFieldExtraBytes];
+    std::cout << "maskingKey:" << std::endl;
+    std::cout << maskingKey << std::endl;
     char *payloadData = new char[payloadLength + 1];
     memset(payloadData, 0, payloadLength + 1);
     memcpy(payloadData, &client_message[2 + payloadFieldExtraBytes + 4], payloadLength);
     for (int i = 0; i < payloadLength; i++) {
         payloadData[i] = payloadData[i] ^ maskingKey[i % 4];
     }
-    //std::string abc = payloadData;
-    //std::cout << payloadData << std::endl;
     return payloadData;
 }
 

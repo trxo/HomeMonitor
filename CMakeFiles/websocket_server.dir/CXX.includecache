@@ -41,6 +41,8 @@ base64/base64.cpp
 /Users/taki/code/websocket-server/base64/base64.cpp
 sha1/sha1.cpp
 /Users/taki/code/websocket-server/sha1/sha1.cpp
+fstream
+-
 
 /Users/taki/code/websocket-server/sha1/sha1.cpp
 sha1.hpp
