@@ -1,0 +1,3 @@
+/Users/taki/code/websocket-server/CMakeFiles/rebuild_cache.dir
+/Users/taki/code/websocket-server/CMakeFiles/edit_cache.dir
+/Users/taki/code/websocket-server/CMakeFiles/websocket_server.dir

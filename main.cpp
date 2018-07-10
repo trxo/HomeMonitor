@@ -5,15 +5,10 @@
 #include <unistd.h>     //write
 #include <iostream>
 #include <sstream>
-#include "cryptopp/sha.h"
-#include "cryptopp/filters.h"
-#include "cryptopp/hex.h"
-#include "cryptopp/base64.h"
 #include "frame.h"
+#include "base64/base64.cpp"
+#include "sha1/sha1.cpp"
 
-using namespace CryptoPP;
-
-const SERVICE_PORT = 8777;
 
 int main(int argc, char *argv[]) {
 
@@ -31,7 +26,7 @@ int main(int argc, char *argv[]) {
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(SERVICE_PORT);
+    server.sin_port = htons(8089);
 
     //Bind
     if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
@@ -65,11 +60,10 @@ int main(int argc, char *argv[]) {
         if (!handshake) {
 
             handshake = doHandshake(client_message,client_sock);
-
         } else {
-
+            printf("clion debug\n");
             std::string res_str = frameDecode(client_message);
-            printf("recv data from client:%s\n",res_str);
+            printf("recv data from client:%s\n",res_str.c_str());
             //将该消息回送客户端
             sendMsg(res_str,client_sock);
 
@@ -96,6 +90,7 @@ int sendMsg(std::string string,int client_sock){
 
 bool doHandshake(char *client_message,int client_sock)
 {
+    std::cout << client_message << std::endl;
     printf("do handshake...\n");
     //handshake
     std::string response;
@@ -137,8 +132,9 @@ bool doHandshake(char *client_message,int client_sock)
     response = "HTTP/1.1 101 Switching Protocols\r\n";
     response += "Upgrade: websocket\r\n";
     response += "Connection: upgrade\r\n";
-    response += "Sec-WebSocket-Accept: ";
-    response += accept + "\r\n";
+    response += "Sec-WebSocket-Accept: " + accept + "\r\n";
+    response += "Sec-WebSocket-Extensions: permessage-deflate";
+    response += "\r\n\r\n";
 
     write(client_sock, response.c_str(), response.size());
 
@@ -147,24 +143,19 @@ bool doHandshake(char *client_message,int client_sock)
 
 
 /**
- * 获取websocket加密key
+ * 获取websocket加密accept
  * @param key
  * @return
  */
 std::string getKey(std::string key) {
-    //std::cout << key << std::endl;
-    SHA1 sha1;
-    std::string dst;
-    std::string base;
-    std::string mask = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-    StringSource(key + mask, true, new HashFilter(sha1, new HexEncoder(new StringSink(dst))));
-
-    //std::cout << dst << std::endl;
-
-    StringSource(HexToBin(dst), true, new Base64Encoder(new StringSink(base)));
-
-    return base;
+    //key + mask
+    const std::string input = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    SHA1 checksum;
+    checksum.update(input);
+    std::string hash = checksum.final();
+    //获取二进制流
+    std::string str = HexToBin(hash);
+    return base64_encode(reinterpret_cast<const unsigned char*>(str.c_str()),str.length());
 }
 
 /**
