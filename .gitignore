@@ -5,3 +5,4 @@ Makefile
 cmake-build-debug
 cmake_install.cmake
 *.cbp
+websocket_server
