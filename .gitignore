@@ -1,4 +1,5 @@
 .idea
+.CMakeFiles
 .DS_Store
 Makefile
 cmake-build-debug
