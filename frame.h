@@ -1,21 +1,5 @@
-//
-// Created by z862778 on 2017/5/11.
-//
-#include <iostream>
 #ifndef WEBSOCKET_SERVER_FRAME_H
 #define WEBSOCKET_SERVER_FRAME_H
-
-std::string getKey(std::string);
-
-std::string HexToBin(const std::string &strHex);
-
-std::string frameDecode(char *client_message);
-
-void frameEncode(std::string, std::string &outFrame);
-
-bool doHandshake(char *client_message,int client_sock);
-
-int sendMsg(std::string,int client_sock);
 
 enum WS_Status {
     WS_STATUS_CONNECT = 0,
@@ -33,4 +17,18 @@ enum WS_FrameType {
     WS_CLOSING_FRAME = 0x08
 };
 
-#endif //WEBSOCKET_SERVER_FRAME_H
+
+std::string getKey(std::string);
+
+std::string HexToBin(const std::string &strHex);
+
+std::string frameDecode(char *client_message);
+
+int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameType frameType);
+
+bool doHandshake(char *client_message,int client_sock);
+
+int sendMsg(std::string,int client_sock);
+
+
+#endif WEBSOCKET_SERVER_FRAME_H
