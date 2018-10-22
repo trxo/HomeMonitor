@@ -12,20 +12,19 @@
 #include <unistd.h>
 
 
-
+#define BUF_SIZE 0xFFFF
 int main(int argc, char *argv[]) {
 
-    int socket_desc, client_sock, c, read_size;
+    int socket_desc, client_sock, c;
     struct sockaddr_in server, client;
-    char client_message[2000] = {};
-
+    char buffer[BUF_SIZE];
+    bzero(buffer,BUF_SIZE);
     //Create socket
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-
     if (socket_desc == -1) {
-        printf("Cound not create socket!\n");
+        perror("Cound not create socket!");
+        exit(-1);
     }
-
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
@@ -34,14 +33,19 @@ int main(int argc, char *argv[]) {
     //Bind
     if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("bind failed.");
-        return 1;
+        exit(-1);
     }
 
     //listen
-    listen(socket_desc, 3);
+    int ret = listen(socket_desc, 3);
+    if(ret < 0){
+        perror("listen failed.");
+        exit(-1);
+    }
 
     //Accept and incomming connection
     printf("Waiting for incomming connections...\n");
+
     c = sizeof(struct sockaddr_in);
 
     //accept connection from a incomming client
@@ -49,7 +53,7 @@ int main(int argc, char *argv[]) {
 
     if (client_sock < 0) {
         perror("accept error.");
-        return 1;
+        exit(-1);
     }
 
     printf("Connection accepted...\n");
@@ -57,29 +61,23 @@ int main(int argc, char *argv[]) {
     //握手标示
     bool handshake = false;
 
+    ssize_t read_size;
     //Recevied message from client
-    while ((read_size = recv(client_sock, client_message, 2000, 0)) > 0) {
-        printf("%d\n",read_size);
-//        char data[read_size];
-//        printf("%s\n",data);
-//        strncpy(data,client_message,read_size);
+    while ((read_size = recv(client_sock, buffer, 2000, 0)) > 0) {
+
+        printf("client_message size is: %d\n",read_size);
         if (!handshake) {
-            handshake = doHandshake(client_message,client_sock);
+            handshake = doHandshake(buffer,client_sock);
+            printf("handshake success...\n");
         } else {
-            printf("msg--------------->\n");
-
-            char d[read_size];
-            strncpy(d,client_message,read_size);
-
-
-            std::string res_str = frameDecode(client_message);
+            std::string res_str = frameDecode(buffer);
             printf("recv data from client:%s\n",res_str.c_str());
             //将该消息回送客户端
             sendMsg(res_str,client_sock);
 
         }
-        memset(client_message,0, sizeof(client_message));
-        usleep(10);
+        memset(buffer,0, sizeof(buffer));
+        bzero(buffer,BUF_SIZE);
     }
 
     if (read_size == 0) {
@@ -90,8 +88,6 @@ int main(int argc, char *argv[]) {
     }
     return 0;
 }
-
-
 
 int sendMsg(std::string string,int client_sock){
     std::string res;
@@ -142,15 +138,15 @@ bool doHandshake(char *client_message,int client_sock)
     response = "HTTP/1.1 101 Switching Protocols\r\n";
     response += "Upgrade: websocket\r\n";
     response += "Connection: upgrade\r\n";
-    response += "Sec-WebSocket-Accept: " + accept + "\r\n";
-    response += "Sec-WebSocket-Extensions: permessage-deflate";
-    response += "\r\n\r\n";
-
-    write(client_sock, response.c_str(), response.size());
+    response += "Sec-WebSocket-Accept: " + accept + "\r\n\r\n";
+    char p[2000];
+    response.copy(p, response.size(), 0);
+    *(p + response.size()) = '/0'; //要手动加上结束符
+    write(client_sock, p, strlen(p));
+//    write(client_sock, response.c_str(), response.size());
 
     return true;
 }
-
 
 /**
  * 获取websocket加密accept
@@ -270,3 +266,4 @@ void frameEncode(std::string msg, std::string &outFrame) {
     delete[] frame;
     delete[] frameHeader;
 }
+
