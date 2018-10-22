@@ -1,6 +1,7 @@
 .idea
-.CMakeFiles
+CMakeFiles
 .DS_Store
 Makefile
 cmake-build-debug
 cmake_install.cmake
+*.cbp
