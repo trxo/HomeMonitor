@@ -234,35 +234,20 @@ std::string frameDecode(char *client_message) {
 void frameEncode(std::string msg, std::string &outFrame) {
     uint32_t messageLength = msg.size();
     printf("messageLength: %d\n",messageLength);
-
     uint8_t payloadFieldExtraBytes = (messageLength <= 0x7d) ? 0 : 2;
-
     uint8_t frameHeaderSize = 2 + payloadFieldExtraBytes;
-
     uint8_t *frameHeader = new uint8_t[frameHeaderSize];
-
     memset(frameHeader, 0, frameHeaderSize);
-
     frameHeader[0] = static_cast<uint8_t>(0x80 | WS_TEXT_FRAME);
-
     frameHeader[1] = static_cast<uint8_t>(messageLength);
-
-
+    std::cout<< frameHeader[1] << std::endl;
     uint32_t frameSize = frameHeaderSize + messageLength;
-
     //printf("frameSize: %d\n",frameSize);
-
     char *frame = new char[frameSize + 1];
-
     memcpy(frame, frameHeader, frameHeaderSize);
-
     memcpy(frame + frameHeaderSize, msg.c_str(), messageLength);
-
     frame[frameSize] = '\0';
-
-
     outFrame = frame;
-
     delete[] frame;
     delete[] frameHeader;
 }
