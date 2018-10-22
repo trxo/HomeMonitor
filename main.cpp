@@ -9,7 +9,7 @@
 #include "base64/base64.cpp"
 #include "sha1/sha1.cpp"
 #include <fstream>
-#include(unistd.h)
+#include <unistd.h>
 
 
 
@@ -70,13 +70,6 @@ int main(int argc, char *argv[]) {
 
             char d[read_size];
             strncpy(d,client_message,read_size);
-
-
-            FILE *fp;
-            fp = fopen("buff.txt","w");
-            fwrite(d,read_size)
-            fclose(fp);
-
 
 
             std::string res_str = frameDecode(client_message);
