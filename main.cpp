@@ -10,10 +10,13 @@
 #include "sha1/sha1.cpp"
 #include <fstream>
 #include <unistd.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
 
 #define SERVER_PORT 8099
 #define SERVER_IP "127.0.0.1"
 #define BUF_SIZE 0xFFFF
+#define EPOLL_SIZE 5000
 
 
 int main(int argc, char *argv[]) {
@@ -38,12 +41,28 @@ int main(int argc, char *argv[]) {
 
     //listen
     int ret = listen(socket_desc, 3);
-    if(ret < 0){
+    if (ret < 0) {
         perror("listen failed.");
         exit(-1);
     }
 
-    printf("the server start listen at: %s:%d\n",SERVER_IP,SERVER_PORT);
+    printf("the server start listen at: %s:%d\n", SERVER_IP, SERVER_PORT);
+
+    int epfd = epoll_create(EPOLL_SIZE);
+    if (epfd < 0) {
+        perror("epoll create error!");
+        exit(-1);
+    }
+
+    printf("epoll create, epfd:%d\n",epfd);
+
+    static struct epoll_event events[EPOLL_SIZE];
+    struct epoll_event ev;
+    ev.data.fd = epfd;
+    ev.events = EPOLLIN | EPOLLET;
+    epoll_ctl(epfd,EPOLL_CTL_ADD,socket_desc,&ev);
+//    fcntl(socket_desc,F_SETFL,);
+
 
 
 
@@ -62,22 +81,22 @@ int main(int argc, char *argv[]) {
 
     ssize_t read_size;
     char buffer[BUF_SIZE];
-    bzero(buffer,BUF_SIZE);
+    bzero(buffer, BUF_SIZE);
 
     while ((read_size = recv(client_sock, buffer, BUF_SIZE, 0)) > 0) {
 
         if (!handshake) {
-            handshake = doHandshake(buffer,client_sock);
-            if(!handshake){
+            handshake = doHandshake(buffer, client_sock);
+            if (!handshake) {
                 perror("handshake error");
                 exit(-1);
             }
         } else {
             std::string res_str = frameDecode(buffer);
-            printf("recv data from client:%s\n",res_str.c_str());
-            sendMsg(res_str,client_sock);
+            printf("recv data from client:%s\n", res_str.c_str());
+            sendMsg(res_str, client_sock);
         }
-        bzero(buffer,BUF_SIZE);
+        bzero(buffer, BUF_SIZE);
     }
     if (read_size == 0) {
         printf("Client disconnected.\n");
@@ -88,14 +107,13 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-int sendMsg(std::string string,int client_sock){
+int sendMsg(std::string string, int client_sock) {
     std::string res;
-    wsEncodeFrame(string, res,WS_TEXT_FRAME);
+    wsEncodeFrame(string, res, WS_TEXT_FRAME);
     return write(client_sock, res.c_str(), res.size());
 }
 
-bool doHandshake(char *client_message,int client_sock)
-{
+bool doHandshake(char *client_message, int client_sock) {
     //handshake
     std::string response;
 
@@ -154,7 +172,7 @@ std::string getKey(std::string key) {
     std::string hash = checksum.final();
     //获取二进制流
     std::string str = HexToBin(hash);
-    return base64_encode(reinterpret_cast<const unsigned char*>(str.c_str()),str.length());
+    return base64_encode(reinterpret_cast<const unsigned char *>(str.c_str()), str.length());
 }
 
 /**
@@ -223,12 +241,10 @@ std::string frameDecode(char *client_message) {
 }
 
 
-int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameType frameType)
-{
+int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameType frameType) {
     int ret = WS_EMPTY_FRAME;
     const uint32_t messageLength = inMessage.size();
-    if (messageLength > 32767)
-    {
+    if (messageLength > 32767) {
         // 暂不支持这么长的数据
         return WS_ERROR_FRAME;
     }
@@ -242,12 +258,9 @@ int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameTyp
     frameHeader[0] = static_cast<uint8_t>(0x80 | frameType);
 
     // 填充数据长度
-    if (messageLength <= 0x7d)
-    {
+    if (messageLength <= 0x7d) {
         frameHeader[1] = static_cast<uint8_t>(messageLength);
-    }
-    else
-    {
+    } else {
         frameHeader[1] = 0x7e;
         uint16_t len = htons(messageLength);
         memcpy(&frameHeader[2], &len, payloadFieldExtraBytes);
