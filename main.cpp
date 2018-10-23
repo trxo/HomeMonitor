@@ -5,19 +5,22 @@
 #include <unistd.h>     //write
 #include <iostream>
 #include <sstream>
-#include "frame.h"
 #include "base64/base64.cpp"
 #include "sha1/sha1.cpp"
 #include <fstream>
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
+#include <list>
+#include <map>
+#include "frame.h"
+#include "epoll.h"
 
 #define SERVER_PORT 8099
 #define SERVER_IP "127.0.0.1"
 #define BUF_SIZE 0xFFFF
-#define EPOLL_SIZE 5000
 
+std::map<int,int> clients_map;
 
 int main(int argc, char *argv[]) {
 
@@ -27,20 +30,20 @@ int main(int argc, char *argv[]) {
     server.sin_port = htons(SERVER_PORT);
 
     //create socket
-    int socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc < 0) {
+    int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listenfd < 0) {
         perror("Cound not create socket!");
         exit(-1);
     }
 
     //bind
-    if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+    if (bind(listenfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("bind failed.");
         exit(-1);
     }
 
     //listen
-    int ret = listen(socket_desc, 3);
+    int ret = listen(listenfd, 3);
     if (ret < 0) {
         perror("listen failed.");
         exit(-1);
@@ -54,57 +57,47 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    printf("epoll create, epfd:%d\n",epfd);
+    printf("epoll create, epfd:%d\n", epfd);
 
     static struct epoll_event events[EPOLL_SIZE];
-    struct epoll_event ev;
-    ev.data.fd = epfd;
-    ev.events = EPOLLIN | EPOLLET;
-    epoll_ctl(epfd,EPOLL_CTL_ADD,socket_desc,&ev);
-//    fcntl(socket_desc,F_SETFL,);
+    addfd(epfd, listenfd, true);
 
-
-
-
-    socklen_t socket_len = sizeof(struct sockaddr_in);
-
-    //accept
-    int client_sock = accept(socket_desc, (struct sockaddr *) &client, (socklen_t *) &socket_len);
-
-    if (client_sock < 0) {
-        perror("accept error.");
-        exit(-1);
-    }
-
-    //handshake
-    bool handshake = false;
-
-    ssize_t read_size;
     char buffer[BUF_SIZE];
-    bzero(buffer, BUF_SIZE);
-
-    while ((read_size = recv(client_sock, buffer, BUF_SIZE, 0)) > 0) {
-
-        if (!handshake) {
-            handshake = doHandshake(buffer, client_sock);
-            if (!handshake) {
-                perror("handshake error");
-                exit(-1);
-            }
-        } else {
-            std::string res_str = frameDecode(buffer);
-            printf("recv data from client:%s\n", res_str.c_str());
-            sendMsg(res_str, client_sock);
+    while (1) {
+        int epoll_event_count = epoll_wait(epfd, events, EPOLL_SIZE, -1);
+        if (epoll_event_count < 0) {
+            perror("epoll wait error!");
+            break;
         }
-        bzero(buffer, BUF_SIZE);
+        for (int i = 0; i < epoll_event_count; ++i) {
+            int sockfd = events[i].data.fd;
+            if (sockfd == listenfd) {
+                struct sockaddr_in client_address;
+                socklen_t client_addr_length = sizeof(struct sockaddr_in);
+                int clientfd = accept(listenfd, (struct sockaddr *) &client_address, &client_addr_length);
+                printf("client connectiong from: %s : %d (IP:PORT),client = %d\n", inet_ntoa(client_address.sin_addr),
+                       ntohs(client_address.sin_port), clientfd);
+                addfd(epfd, clientfd, true);
+                clients_map[clientfd] = 0;
+                printf("Add new clientfd = %d to epoll\n",clientfd);
+                printf("Now there are %d clients in the chat room\n",(int)clients_map.size());
+            }else{
+                bzero(buffer,BUF_SIZE);
+                ssize_t read_size = recv(sockfd, buffer, BUF_SIZE, 0);
+                printf("recv clientfd msg size:%d\n",read_size);
+                if(!clients_map[sockfd]){
+                    if(doHandshake(buffer,sockfd)){
+                        clients_map[sockfd] = 1;
+                    } else{
+                        clients_map.erase(sockfd);
+                        close(sockfd);
+                    }
+                }
+            }
+        }
     }
-    if (read_size == 0) {
-        printf("Client disconnected.\n");
-    } else if (read_size == -1) {
-        perror("recv failed.");
-    }
-    close(socket_desc);
-    return 0;
+
+
 }
 
 int sendMsg(std::string string, int client_sock) {
