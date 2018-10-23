@@ -11,26 +11,26 @@
 #include <fstream>
 #include <unistd.h>
 
-
+#define SERVER_PORT 8099
+#define SERVER_IP "127.0.0.1"
 #define BUF_SIZE 0xFFFF
+
+
 int main(int argc, char *argv[]) {
 
-    int socket_desc, client_sock, c;
     struct sockaddr_in server, client;
-    char buffer[BUF_SIZE];
-    bzero(buffer,BUF_SIZE);
-    //Create socket
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc == -1) {
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = inet_addr(SERVER_IP);
+    server.sin_port = htons(SERVER_PORT);
+
+    //create socket
+    int socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_desc < 0) {
         perror("Cound not create socket!");
         exit(-1);
     }
-    //Prepare the sockaddr_in structure
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8089);
 
-    //Bind
+    //bind
     if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("bind failed.");
         exit(-1);
@@ -43,51 +43,48 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    //Accept and incomming connection
-    printf("Waiting for incomming connections...\n");
+    printf("the server start listen at: %s:%d\n",SERVER_IP,SERVER_PORT);
 
-    c = sizeof(struct sockaddr_in);
 
-    //accept connection from a incomming client
-    client_sock = accept(socket_desc, (struct sockaddr *) &client, (socklen_t *) &c);
+
+    socklen_t socket_len = sizeof(struct sockaddr_in);
+
+    //accept
+    int client_sock = accept(socket_desc, (struct sockaddr *) &client, (socklen_t *) &socket_len);
 
     if (client_sock < 0) {
         perror("accept error.");
         exit(-1);
     }
 
-    printf("Connection accepted...\n");
-
-    //握手标示
+    //handshake
     bool handshake = false;
 
     ssize_t read_size;
-    //Recevied message from client
+    char buffer[BUF_SIZE];
+    bzero(buffer,BUF_SIZE);
+
     while ((read_size = recv(client_sock, buffer, BUF_SIZE, 0)) > 0) {
 
-        printf("client_message size is: %d\n",read_size);
         if (!handshake) {
             handshake = doHandshake(buffer,client_sock);
-            printf("handshake success...\n");
-            sendMsg("helllo",client_sock);
+            if(!handshake){
+                perror("handshake error");
+                exit(-1);
+            }
         } else {
             std::string res_str = frameDecode(buffer);
-
-
-//            printf("recv data from client:%s\n",res_str);
-            //将该消息回送客户端
+            printf("recv data from client:%s\n",res_str.c_str());
             sendMsg(res_str,client_sock);
-
         }
         bzero(buffer,BUF_SIZE);
     }
-
     if (read_size == 0) {
         printf("Client disconnected.\n");
-        fflush(stdout);
     } else if (read_size == -1) {
         perror("recv failed.");
     }
+    close(socket_desc);
     return 0;
 }
 
@@ -99,7 +96,6 @@ int sendMsg(std::string string,int client_sock){
 
 bool doHandshake(char *client_message,int client_sock)
 {
-    printf("do handshake...\n");
     //handshake
     std::string response;
 
@@ -215,10 +211,8 @@ std::string frameDecode(char *client_message) {
     }
 
 
-    // header: 2字节, masking key: 4字节
+    // header: 2byte, masking key: 4byte
     const char *maskingKey = &client_message[2 + payloadFieldExtraBytes];
-    std::cout << "maskingKey:" << std::endl;
-    std::cout << maskingKey << std::endl;
     char *payloadData = new char[payloadLength + 1];
     memset(payloadData, 0, payloadLength + 1);
     memcpy(payloadData, &client_message[2 + payloadFieldExtraBytes + 4], payloadLength);
