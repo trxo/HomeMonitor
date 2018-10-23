@@ -17,7 +17,7 @@
 #include "epoll.h"
 
 #define SERVER_PORT 8099
-#define SERVER_IP "127.0.0.1"
+#define SERVER_IP "0.0.0.0"
 #define BUF_SIZE 0xFFFF
 
 std::map<int,int> clients_map;
@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
             }else{
                 bzero(buffer,BUF_SIZE);
                 ssize_t read_size = recv(sockfd, buffer, BUF_SIZE, 0);
-                printf("recv clientfd msg size:%d\n",read_size);
+
                 if(!clients_map[sockfd]){
                     if(doHandshake(buffer,sockfd)){
                         clients_map[sockfd] = 1;
@@ -92,6 +92,9 @@ int main(int argc, char *argv[]) {
                         clients_map.erase(sockfd);
                         close(sockfd);
                     }
+                } else {
+                    std::string recv_msg = frameDecode(buffer);
+                    printf("recv clientfd :%d msg :%s\n",sockfd,recv_msg.c_str());
                 }
             }
         }
