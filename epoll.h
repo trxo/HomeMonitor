@@ -1,11 +1,9 @@
+#ifndef EPOLL_H
+#define EPOLL_H
 #include <sys/epoll.h>
 #include <fcntl.h>
-
 //epoll size
 #define EPOLL_SIZE 1000
-
-
-
 /**
  * set no block
  * @param sockfd
@@ -32,4 +30,4 @@ void addfd(int epollfd,int fd, bool enable_et){
     epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&ev);
     setnonblock(fd);
 }
-
+#endif EPOLL_H
