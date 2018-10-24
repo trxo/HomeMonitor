@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <list>
 #include <map>
+#include <wait.h>
 #include "config.h"
 #include "websocekt.h"
 #include "epoll.h"
@@ -51,6 +52,7 @@ int main(int argc, char *argv[]) {
        }
 
        printf("the server start listen at: %s:%d\n", SERVER_IP, SERVER_PORT);
+       wait(NULL);
    }
 
 
