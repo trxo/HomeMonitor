@@ -5,97 +5,163 @@
 #include <unistd.h>     //write
 #include <iostream>
 #include <sstream>
-#include "frame.h"
 #include "base64/base64.cpp"
 #include "sha1/sha1.cpp"
 #include <fstream>
 #include <unistd.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <list>
+#include <map>
+#include "frame.h"
+#include "epoll.h"
 
 #define SERVER_PORT 8099
-#define SERVER_IP "127.0.0.1"
+#define SERVER_SOCKET_PROT 8098
+#define SERVER_IP "0.0.0.0"
 #define BUF_SIZE 0xFFFF
+
+std::map<int,bool> clients_map;
+void webServer();
 
 
 int main(int argc, char *argv[]) {
 
+   int pid = fork();
+   if(pid < 0 ){
+       perror("fork error!");
+   }else if (pid == 0){
+       webServer();
+   }else{
+       struct sockaddr_in server;
+       server.sin_family = AF_INET;
+       server.sin_addr.s_addr = inet_addr(SERVER_IP);
+       server.sin_port = htons(SERVER_SOCKET_PROT);
+
+       int listenfd = socket(AF_INET,fSOCK_STREAM,0);
+       if (listenfd < 0) {
+           perror("Cound not create socket!");
+           exit(-1);
+       }
+       //bind
+       if (bind(listenfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
+           perror("bind failed.");
+           exit(-1);
+       }
+
+       //listen
+       int ret = listen(listenfd, 3);
+       if (ret < 0) {
+           perror("listen failed.");
+           exit(-1);
+       }
+
+       printf("the server start listen at: %s:%d\n", SERVER_IP, SERVER_PORT);
+   }
+
+
+}
+
+void webServer(){
     struct sockaddr_in server, client;
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(SERVER_IP);
     server.sin_port = htons(SERVER_PORT);
 
     //create socket
-    int socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc < 0) {
+    int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listenfd < 0) {
         perror("Cound not create socket!");
         exit(-1);
     }
 
     //bind
-    if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+    if (bind(listenfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("bind failed.");
         exit(-1);
     }
 
     //listen
-    int ret = listen(socket_desc, 3);
-    if(ret < 0){
+    int ret = listen(listenfd, 3);
+    if (ret < 0) {
         perror("listen failed.");
         exit(-1);
     }
 
-    printf("the server start listen at: %s:%d\n",SERVER_IP,SERVER_PORT);
+    printf("the server start listen at: %s:%d\n", SERVER_IP, SERVER_PORT);
 
-
-
-    socklen_t socket_len = sizeof(struct sockaddr_in);
-
-    //accept
-    int client_sock = accept(socket_desc, (struct sockaddr *) &client, (socklen_t *) &socket_len);
-
-    if (client_sock < 0) {
-        perror("accept error.");
+    int epfd = epoll_create(EPOLL_SIZE);
+    if (epfd < 0) {
+        perror("epoll create error!");
         exit(-1);
     }
 
-    //handshake
-    bool handshake = false;
+    printf("epoll create, epfd:%d\n", epfd);
 
-    ssize_t read_size;
+    static struct epoll_event events[EPOLL_SIZE];
+    addfd(epfd, listenfd, true);
+
     char buffer[BUF_SIZE];
-    bzero(buffer,BUF_SIZE);
-
-    while ((read_size = recv(client_sock, buffer, BUF_SIZE, 0)) > 0) {
-
-        if (!handshake) {
-            handshake = doHandshake(buffer,client_sock);
-            if(!handshake){
-                perror("handshake error");
-                exit(-1);
-            }
-        } else {
-            std::string res_str = frameDecode(buffer);
-            printf("recv data from client:%s\n",res_str.c_str());
-            sendMsg(res_str,client_sock);
+    while (1) {
+        int epoll_event_count = epoll_wait(epfd, events, EPOLL_SIZE, -1);
+        if (epoll_event_count < 0) {
+            perror("epoll wait error!");
+            break;
         }
-        bzero(buffer,BUF_SIZE);
+        for (int i = 0; i < epoll_event_count; ++i) {
+            int sockfd = events[i].data.fd;
+            if (sockfd == listenfd) {
+                struct sockaddr_in client_address;
+                socklen_t client_addr_length = sizeof(struct sockaddr_in);
+                int clientfd = accept(listenfd, (struct sockaddr *) &client_address, &client_addr_length);
+                printf("client connectiong from: %s : %d (IP:PORT),client = %d\n", inet_ntoa(client_address.sin_addr),
+                       ntohs(client_address.sin_port), clientfd);
+                addfd(epfd, clientfd, true);
+                clients_map[clientfd] = false;
+                printf("Add new clientfd = %d to epoll\n",clientfd);
+                printf("Now there are %d clients in the chat room\n",(int)clients_map.size());
+            }else{
+                bzero(buffer,BUF_SIZE);
+                ssize_t read_size = recv(sockfd, buffer, BUF_SIZE, 0);
+
+                //close
+                if(read_size == 0){
+                    printf("clientfd %d close connections \n",sockfd);
+                    close(sockfd);
+                    continue;
+                }
+
+                //error
+                if(read_size < 0){
+                    printf("recv msg from clientfd %d failed\n",sockfd);
+                    close(sockfd);
+                    continue;
+                }
+
+                //handshank
+                if(!clients_map[sockfd]){
+                    if(doHandshake(buffer,sockfd)){
+                        clients_map[sockfd] = true;
+                    } else{
+                        clients_map.erase(sockfd);
+                        close(sockfd);
+                    }
+                } else {  //frame data
+                    std::string recv_msg = frameDecode(buffer);
+                    printf("recv clientfd :%d msg :%s\n",sockfd,recv_msg.c_str());
+                }
+            }
+        }
     }
-    if (read_size == 0) {
-        printf("Client disconnected.\n");
-    } else if (read_size == -1) {
-        perror("recv failed.");
-    }
-    close(socket_desc);
-    return 0;
 }
 
-int sendMsg(std::string string,int client_sock){
+int sendMsg(std::string string, int client_sock) {
     std::string res;
-    wsEncodeFrame(string, res,WS_TEXT_FRAME);
+    wsEncodeFrame(string, res, WS_TEXT_FRAME);
     return write(client_sock, res.c_str(), res.size());
 }
 
-bool doHandshake(char *client_message,int client_sock)
-{
+bool doHandshake(char *client_message, int client_sock) {
     //handshake
     std::string response;
 
@@ -154,7 +220,7 @@ std::string getKey(std::string key) {
     std::string hash = checksum.final();
     //获取二进制流
     std::string str = HexToBin(hash);
-    return base64_encode(reinterpret_cast<const unsigned char*>(str.c_str()),str.length());
+    return base64_encode(reinterpret_cast<const unsigned char *>(str.c_str()), str.length());
 }
 
 /**
@@ -223,12 +289,10 @@ std::string frameDecode(char *client_message) {
 }
 
 
-int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameType frameType)
-{
+int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameType frameType) {
     int ret = WS_EMPTY_FRAME;
     const uint32_t messageLength = inMessage.size();
-    if (messageLength > 32767)
-    {
+    if (messageLength > 32767) {
         // 暂不支持这么长的数据
         return WS_ERROR_FRAME;
     }
@@ -242,12 +306,9 @@ int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameTyp
     frameHeader[0] = static_cast<uint8_t>(0x80 | frameType);
 
     // 填充数据长度
-    if (messageLength <= 0x7d)
-    {
+    if (messageLength <= 0x7d) {
         frameHeader[1] = static_cast<uint8_t>(messageLength);
-    }
-    else
-    {
+    } else {
         frameHeader[1] = 0x7e;
         uint16_t len = htons(messageLength);
         memcpy(&frameHeader[2], &len, payloadFieldExtraBytes);
