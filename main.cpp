@@ -17,13 +17,52 @@
 #include "epoll.h"
 
 #define SERVER_PORT 8099
+#define SERVER_SOCKET_PROT 8098
 #define SERVER_IP "0.0.0.0"
 #define BUF_SIZE 0xFFFF
 
-std::map<int,int> clients_map;
+std::map<int,bool> clients_map;
+void webServer();
+
 
 int main(int argc, char *argv[]) {
 
+   int pid = fork();
+   if(pid < 0 ){
+       perror("fork error!");
+   }else if (pid == 0){
+       webServer();
+   }else{
+       struct sockaddr_in server;
+       server.sin_family = AF_INET;
+       server.sin_addr.s_addr = inet_addr(SERVER_IP);
+       server.sin_port = htons(SERVER_SOCKET_PROT);
+
+       int listenfd = socket(AF_INET,fSOCK_STREAM,0);
+       if (listenfd < 0) {
+           perror("Cound not create socket!");
+           exit(-1);
+       }
+       //bind
+       if (bind(listenfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
+           perror("bind failed.");
+           exit(-1);
+       }
+
+       //listen
+       int ret = listen(listenfd, 3);
+       if (ret < 0) {
+           perror("listen failed.");
+           exit(-1);
+       }
+
+       printf("the server start listen at: %s:%d\n", SERVER_IP, SERVER_PORT);
+   }
+
+
+}
+
+void webServer(){
     struct sockaddr_in server, client;
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(SERVER_IP);
@@ -78,29 +117,42 @@ int main(int argc, char *argv[]) {
                 printf("client connectiong from: %s : %d (IP:PORT),client = %d\n", inet_ntoa(client_address.sin_addr),
                        ntohs(client_address.sin_port), clientfd);
                 addfd(epfd, clientfd, true);
-                clients_map[clientfd] = 0;
+                clients_map[clientfd] = false;
                 printf("Add new clientfd = %d to epoll\n",clientfd);
                 printf("Now there are %d clients in the chat room\n",(int)clients_map.size());
             }else{
                 bzero(buffer,BUF_SIZE);
                 ssize_t read_size = recv(sockfd, buffer, BUF_SIZE, 0);
 
+                //close
+                if(read_size == 0){
+                    printf("clientfd %d close connections \n",sockfd);
+                    close(sockfd);
+                    continue;
+                }
+
+                //error
+                if(read_size < 0){
+                    printf("recv msg from clientfd %d failed\n",sockfd);
+                    close(sockfd);
+                    continue;
+                }
+
+                //handshank
                 if(!clients_map[sockfd]){
                     if(doHandshake(buffer,sockfd)){
-                        clients_map[sockfd] = 1;
+                        clients_map[sockfd] = true;
                     } else{
                         clients_map.erase(sockfd);
                         close(sockfd);
                     }
-                } else {
+                } else {  //frame data
                     std::string recv_msg = frameDecode(buffer);
                     printf("recv clientfd :%d msg :%s\n",sockfd,recv_msg.c_str());
                 }
             }
         }
     }
-
-
 }
 
 int sendMsg(std::string string, int client_sock) {
