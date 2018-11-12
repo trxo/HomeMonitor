@@ -2,13 +2,8 @@
 #include <string.h>     //strlen
 #include <sys/socket.h>
 #include <arpa/inet.h>  //inet_addr
-#include <unistd.h>     //write
-#include <iostream>
 #include <sstream>
-#include "base64/base64.cpp"
-#include "sha1/sha1.cpp"
 #include <fstream>
-#include <unistd.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <list>
@@ -26,6 +21,7 @@ int main(int argc, char *argv[]) {
    if(pid < 0 ){
        perror("fork error!");
    }else if (pid == 0){
+       //child
        webServer();
    }else{
        struct sockaddr_in server;
@@ -143,7 +139,7 @@ void webServer(){
                         close(sockfd);
                     }
                 } else {  //frame data
-                    std::string recv_msg = frameDecode(buffer);
+                    std::string recv_msg = wsDecodeFrame(buffer);
                     printf("recv clientfd :%d msg :%s\n",sockfd,recv_msg.c_str());
                 }
             }

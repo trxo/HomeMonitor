@@ -1,6 +1,13 @@
 #ifndef WEBSOCKET_H
 #define WEBSOCKET_H
 
+#include <iostream>
+#include <unistd.h>
+#include <string.h>
+#include "sha1/sha1.cpp"
+#include "base64/base64.cpp"
+#include <arpa/inet.h>  //inet_addr
+
 enum WS_Status {
     WS_STATUS_CONNECT = 0,
     WS_STATUS_UNCONNECT = 1,
@@ -22,7 +29,7 @@ std::string getKey(std::string);
 
 std::string HexToBin(const std::string &strHex);
 
-std::string frameDecode(char *client_message);
+std::string wsDecodeFrame(char *client_message);
 
 int wsEncodeFrame(std::string inMessage, std::string &outFrame, enum WS_FrameType frameType);
 
@@ -131,33 +138,31 @@ std::string HexToBin(const std::string &strHex) {
     return strBin;
 }
 
-std::string frameDecode(char *client_message) {
-//    std::cout << "frameDecode" << std::endl;
-//    std::cout << client_message << std::endl;
-//    std::cout << "Fin: "<< (client_message[0] & 0x80) << std::endl;
-//    std::cout << "opCode: "<< (client_message[0] & 0x0F) << std::endl;
-//    std::cout << "Mask: "<< (client_message[1] & 0x80) << std::endl;
-//    std::cout << "payload_len: "<< (client_message[1] & 0x7F) << std::endl;
+std::string wsDecodeFrame(char *buffer) {
+
+//    std::cout << "Fin: "<< (buffer[0] & 0x80) << std::endl;
+//    std::cout << "opCode: "<< (buffer[0] & 0x0F) << std::endl;
+//    std::cout << "Mask: "<< (buffer[1] & 0x80) << std::endl;
+//    std::cout << "payload_len: "<< (buffer[1] & 0x7F) << std::endl;
 
     uint8_t payloadFieldExtraBytes;
-    uint16_t payloadLength = client_message[1] & 0x7F;
+    uint16_t payloadLength = buffer[1] & 0x7F;
 
-    if (payloadLength == 126) {
-        payloadFieldExtraBytes = 2;
-
-    } else if (payloadLength == 127) {
-        payloadFieldExtraBytes = 8;
-
-    } else {
-        payloadFieldExtraBytes = 0;
+    switch (payloadLength) {
+        case 126:
+            payloadFieldExtraBytes = 2;
+            break;
+        case 127:
+            payloadFieldExtraBytes = 8;
+            break;
+        default:
+            payloadFieldExtraBytes = 0;
     }
-
-
     // header: 2byte, masking key: 4byte
-    const char *maskingKey = &client_message[2 + payloadFieldExtraBytes];
+    const char *maskingKey = &buffer[2 + payloadFieldExtraBytes];
     char *payloadData = new char[payloadLength + 1];
     memset(payloadData, 0, payloadLength + 1);
-    memcpy(payloadData, &client_message[2 + payloadFieldExtraBytes + 4], payloadLength);
+    memcpy(payloadData, &buffer[2 + payloadFieldExtraBytes + 4], payloadLength);
     for (int i = 0; i < payloadLength; i++) {
         payloadData[i] = payloadData[i] ^ maskingKey[i % 4];
     }
