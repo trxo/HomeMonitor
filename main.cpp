@@ -7,7 +7,6 @@
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <list>
-
 #include <wait.h>
 #include "websocekt.h"
 
