@@ -1,7 +1,7 @@
 #include <stdio.h>
-#include <string.h>     //strlen
+#include <string.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>  //inet_addr
+#include <arpa/inet.h>
 #include <sstream>
 #include <fstream>
 #include <sys/epoll.h>
